@@ -55,7 +55,7 @@ torchrun --nproc_per_node=8 main_varcon.py \
   --trial 1
 ```
 
-Checkpoints and tau₂ statistics are saved under:
+Checkpoints and $\tau_2$ statistics are saved under:
 ```text
 ./save/VarCon/cifar100_models/VarCon_cifar100_resnet50_mlp_lr_0.5_decay_0.0001_bsz_128_temp_0.1_trial_1_eps_0.02_cosine_warm/
 ```
