@@ -14,13 +14,17 @@ Backbone and utilities are largely adapted from:
 - [SupContrast](https://github.com/HobbitLong/SupContrast)  
 - [pytorch-classification](https://github.com/bearpaw/pytorch-classification)
 
-## Main Flowchart
+## Overview
 
-![VarCon main flowchart](./assets/flowchart.jpg)
+<p align="center">
+  <img src="./assets/flowchart.jpg" alt="VarCon flowchart" width="45%">
+  &nbsp;&nbsp;
+  <img src="./assets/pseudo.png" alt="VarCon pseudo code" width="45%">
+</p>
 
-## Pseudo Code
-
-![VarCon pseudo code](./assets/pseudo.png)
+<p align="center"><b>Figure:</b> VarCon architectural flowchart and pseudocode.<br>
+<b>Left:</b> Input images are processed through an encoder network to produce ℓ₂-normalized embeddings <b>z</b>. Class-level centroids <b>w</b><sub>r</sub> are computed dynamically from mini-batch embeddings. The model determines sample's classification difficulty and applies confidence-adaptive temperature scaling τ₂(<b>z</b>), which tightens constraints on challenging samples and relaxes them for well-classified examples.<br>
+<b>Right:</b> Pseudocode implementation of our ELBO-derived loss function combining KL divergence and negative log-likelihood terms.</p>
 
 ## Installation
 ```bash
