@@ -76,7 +76,7 @@ This script freezes the encoder and trains only the linear classifier head, repo
 ## Repository Structure
 ```
 VarContrast/
-├── main_varcon.py          # DDP training script for VarCon on CIFAR-10/100
+├── main_varcon.py          # DDP training script for VarCon
 ├── main_linear.py          # DDP linear evaluation on frozen VarCon encoder
 ├── losses.py               # VarCon loss implementation
 ├── util.py                 # Transforms, meters, LR scheduling, DDP helpers
