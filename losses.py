@@ -63,7 +63,7 @@ class VarConLoss(nn.Module):
         """
         Args:
             features: [B, feat_dim]  encoder output features
-                      (在当前实现中假设已经是 L2-normalized 的，比如来自 SupConResNet)
+                      (assumed to be L2-normalized, e.g., from SupConResNet)
             labels:   [B]            integer class labels
 
         Returns:
@@ -79,30 +79,30 @@ class VarConLoss(nn.Module):
         device = features.device
         B = features.shape[0]
 
-        # 1) 不再对 features 做二次归一化：
-        #    如果使用 SupConResNet，则 features 已经是 L2-normalized 的。
+        # 1) No re-normalization of features:
+        #    If using VarConResNet, features are already L2-normalized.
         # if self.normalize:
         #     features = F.normalize(features, p=2, dim=1)
 
-        # 2) 计算 batch 内每个类的 centroid (向量化，无 for 循环)
+        # 2) Compute centroid for each class in batch (vectorized, no for loop)
         unique_labels, inverse_indices = torch.unique(labels, return_inverse=True)
-        C_batch = len(unique_labels)  # 当前 batch 中出现的类别数
+        C_batch = len(unique_labels)  # number of classes in current batch
 
         # one_hot: [B, C_batch]
         one_hot = torch.zeros(B, C_batch, device=device)
         one_hot.scatter_(1, inverse_indices.unsqueeze(1), 1.0)
 
-        # 每个类的样本数: [C_batch]
+        # number of samples per class: [C_batch]
         class_counts = one_hot.sum(dim=0).clamp(min=1)
 
         # centroids: [C_batch, feat_dim] = [C_batch, B] @ [B, feat_dim]
         centroids = one_hot.T @ features / class_counts.unsqueeze(1)
 
-        # 归一化 centroids（对应 w_r = \bar z_r / ||\bar z_r||）
+        # Normalize centroids (corresponding to w_r = \bar z_r / ||\bar z_r||)
         if self.normalize:
             centroids = F.normalize(centroids, p=2, dim=1)
 
-        # 不让梯度从 centroids 反传回 features（与论文实现一致）
+        # Detach centroids to prevent gradients from flowing back to features (consistent with paper)
         centroids = centroids.detach()
 
         # 3) logits: z^T w_r / τ₁ (Eq. 8)
@@ -112,7 +112,7 @@ class VarConLoss(nn.Module):
 
         # 4) p_θ(r|z) (softmax over classes, Eq. 8)
         p_theta = F.softmax(logits, dim=1)  # [B, C_batch]
-        # 当前样本对应真实类的置信度 p_θ(r|z): [B]
+        # Confidence p_θ(r|z) for true class of each sample: [B]
         confidences = p_theta.gather(1, inverse_indices.unsqueeze(1)).squeeze(1)
 
         # 5) τ₂ (Eq. 13)
@@ -120,11 +120,11 @@ class VarConLoss(nn.Module):
         tau2 = (self.tau1 - eps) + 2.0 * eps * confidences  # [B]
         tau2 = torch.clamp(tau2, min=1e-6)
 
-        # 6) q_φ (Eq. 10, 11, 12)，复用 one_hot
-        # q_exp: 对真类是 exp(1/τ₂)，其余类是 1
+        # 6) q_φ (Eq. 10, 11, 12), reusing one_hot
+        # q_exp: exp(1/τ₂) for true class, 1 for other classes
         exp_inv_tau2 = torch.exp(1.0 / tau2)               # [B]
         q_exp = 1.0 + (exp_inv_tau2.unsqueeze(1) - 1.0) * one_hot  # [B, C_batch]
-        q_phi = q_exp / q_exp.sum(dim=1, keepdim=True)     # 归一化到概率
+        q_phi = q_exp / q_exp.sum(dim=1, keepdim=True)     # normalize to probability
 
         # 7) Loss (Eq. 7)
         log_p_theta = F.log_softmax(logits, dim=1)         # [B, C_batch]
