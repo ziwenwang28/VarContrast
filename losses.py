@@ -9,24 +9,31 @@ class VarConLoss(nn.Module):
     """
     VarCon: Variational Supervised Contrastive Learning
 
-    Loss definition (per batch):
+    Loss definition (per sample, averaged over batch):
         L_VarCon = D_KL(q_φ(r'|z) || p_θ(r'|z)) - log p_θ(r|z)
 
     where
-        p_θ(r|z)   = softmax(z^T w_r / τ₁)                   (Eq. 8)
-        q_one-hot = 1 if r' = r else 0                      (Eq. 10)
-        q_exp(r') = 1 + [exp(1/τ₂) - 1] * q_one-hot(r')     (Eq. 11)
-        q_φ(r')   = q_exp(r') / Σ_k q_exp(k)                (Eq. 12)
-        τ₂        = (τ₁ - ε) + 2ε * p_θ(r|z)                (Eq. 13)
+        p_θ(r|z)        = exp(z^T w_r / τ₁) / Σ_{r'} exp(z^T w_{r'} / τ₁)   (Eq. 8)
+        q_one-hot(r'|z) = 1 if r' = r else 0                                (Eq. 10)
+        q_exp(r'|z)     = 1 + [exp(1/τ₂) - 1] · q_one-hot(r'|z)             (Eq. 11)
+        q_φ(r'|z)       = q_exp(r'|z) / Σ_{r'} q_exp(r'|z)                  (Eq. 12)
+        τ₂              = (τ₁ - ε) + 2ε · p_θ(r|z)                          (Eq. 13)
+
+    Notation:
+        z       : L2-normalized embedding from encoder
+        w_r     : L2-normalized centroid (class reference vector) for class r
+        τ₁      : fixed temperature scaling the logits
+        τ₂      : confidence-adaptive temperature for target distribution
+        ε       : temperature adaptation range parameter
+        r       : ground-truth class index
+        r'      : dummy class index for summation
 
     Args (init):
         num_classes:    total number of classes (not strictly needed for VarCon itself,
                         since we use batch-wise unique labels, kept for interface)
         feat_dim:       feature dimension (for information only)
         temperature:    τ₁, temperature used in p_θ (softmax logits scaling)
-        epsilon:        ε, adaptive temperature strength (fixed if learn_epsilon=False)
-        learn_epsilon:  whether to learn ε as nn.Parameter
-        epsilon_upper_bound: clamp upper bound when learn_epsilon=True
+        epsilon:        ε, adaptive temperature strength
         normalize:      whether to L2-normalize centroids (features assumed already normalized)
     """
     def __init__(
@@ -35,8 +42,6 @@ class VarConLoss(nn.Module):
         feat_dim: int = 128,
         temperature: float = 0.1,
         epsilon: float = 0.02,
-        learn_epsilon: bool = False,
-        epsilon_upper_bound: float = 0.08,
         normalize: bool = True,
     ):
         super().__init__()
@@ -44,20 +49,7 @@ class VarConLoss(nn.Module):
         self.normalize = normalize
         self.num_classes = num_classes
         self.feat_dim = feat_dim
-        self.epsilon_upper_bound = epsilon_upper_bound
-        self.learn_epsilon = learn_epsilon
-
-        if learn_epsilon:
-            self._epsilon = nn.Parameter(torch.tensor(float(epsilon)))
-        else:
-            self.register_buffer('_epsilon', torch.tensor(float(epsilon)))
-
-    @property
-    def epsilon(self) -> torch.Tensor:
-        """Return epsilon, clamped to [1e-6, epsilon_upper_bound] if learnable."""
-        if self.learn_epsilon:
-            return torch.clamp(self._epsilon, min=1e-6, max=self.epsilon_upper_bound)
-        return self._epsilon
+        self.epsilon = epsilon
 
     def forward(self, features: torch.Tensor, labels: torch.Tensor):
         """
@@ -148,6 +140,6 @@ class VarConLoss(nn.Module):
             'nll': nll.detach(),
             'avg_tau2': tau2.mean().detach(),
             'avg_confidence': confidences.mean().detach(),
-            'epsilon': eps.detach() if torch.is_tensor(eps) else torch.tensor(eps),
+            'epsilon': torch.tensor(eps) if not torch.is_tensor(eps) else eps.detach(),
             'all_tau2s': tau2.detach(),
         }
