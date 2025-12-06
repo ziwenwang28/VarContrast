@@ -55,12 +55,12 @@ class VarConLoss(nn.Module):
         """
         Args:
             features: [B, feat_dim]  encoder output features
-                      (assumed to be L2-normalized, e.g., from SupConResNet)
+                      (assumed to be L2-normalized, e.g., from VarConResNet)
             labels:   [B]            integer class labels
 
         Returns:
             dict with:
-                'total_loss': scalar VarCon loss
+                'total_loss': batch-averaged VarCon loss (scalar)
                 'kl_div':     KL(q||p) term (detached scalar)
                 'nll':        -log p_θ(r|z) term (detached scalar)
                 'avg_tau2':   average τ₂ over batch
@@ -94,7 +94,7 @@ class VarConLoss(nn.Module):
         if self.normalize:
             centroids = F.normalize(centroids, p=2, dim=1)
 
-        # Detach centroids to prevent gradients from flowing back to features (consistent with paper)
+        # Detach centroids to prevent gradients from flowing back to features
         centroids = centroids.detach()
 
         # 3) logits: z^T w_r / τ₁ (Eq. 8)
